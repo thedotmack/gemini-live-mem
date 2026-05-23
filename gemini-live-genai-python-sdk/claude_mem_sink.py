@@ -10,7 +10,6 @@ feed the existing pipeline.
 Entirely opt-in (CLAUDE_MEM_ENABLED) and entirely fail-soft: a missing/unreachable
 worker, or any error here, must never disturb the live audio session.
 """
-import asyncio
 import logging
 import os
 import uuid
@@ -70,6 +69,8 @@ class MemorySink:
         elif event_type in ("turn_complete", "interrupted"):
             await self._flush_turn()
         elif event_type == "tool_call":
+            # Flush pending transcript first so observations stay in chronological order.
+            await self._flush_turn()
             # A real Gemini tool use maps 1:1 onto a claude-mem tool-use observation.
             await self._post_observation(
                 tool_name=event.get("name", "tool_call"),
@@ -115,6 +116,9 @@ class MemorySink:
         """POST to the worker, swallowing every error. Never disturbs the session."""
         try:
             response = await self._client.post(f"{self.worker_url}{path}", json=body)
-            logger.debug(f"claude-mem {path} -> {response.status_code}")
+            if response.status_code >= 400:
+                logger.warning(f"claude-mem {path} -> {response.status_code}: {response.text[:200]}")
+            else:
+                logger.debug(f"claude-mem {path} -> {response.status_code}")
         except Exception as e:
             logger.debug(f"claude-mem {path} failed: {e}")
