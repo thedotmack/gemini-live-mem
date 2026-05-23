@@ -7,6 +7,8 @@ logger = logging.getLogger(__name__)
 from google import genai
 from google.genai import types
 
+from claude_mem_sink import make_memory_sink_if_enabled
+
 class GeminiLive:
     """
     Handles the interaction with the Gemini Live API.
@@ -52,7 +54,11 @@ class GeminiLive:
         try:
           async with self.client.aio.live.connect(model=self.model, config=config) as session:
             logger.info("Gemini Live session opened successfully")
-            
+
+            memory_sink = make_memory_sink_if_enabled()
+            if memory_sink:
+                await memory_sink.on_session_start()
+
             async def send_audio():
                 try:
                     while True:
@@ -180,13 +186,17 @@ class GeminiLive:
                     event = await event_queue.get()
                     if event is None:
                         break
+                    if memory_sink:
+                        await memory_sink.on_event(event)
                     if isinstance(event, dict) and event.get("type") == "error":
                         # Just yield the error event, don't raise to keep the stream alive if possible or let caller handle
                         yield event
-                        break 
+                        break
                     yield event
             finally:
                 logger.info("Cleaning up Gemini Live session tasks")
+                if memory_sink:
+                    await memory_sink.on_session_end()
                 send_audio_task.cancel()
                 send_video_task.cancel()
                 send_text_task.cancel()
