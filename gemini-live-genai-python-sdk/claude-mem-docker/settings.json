@@ -1,0 +1,12 @@
+{
+  "CLAUDE_MEM_MODE": "gemini-live",
+  "CLAUDE_MEM_PROVIDER": "gemini",
+  "CLAUDE_MEM_GEMINI_API_KEY": "__INJECTED_FROM_ENV__",
+  "CLAUDE_MEM_GEMINI_MODEL": "gemini-2.5-flash",
+  "CLAUDE_MEM_GEMINI_RATE_LIMITING_ENABLED": "false",
+  "CLAUDE_MEM_WORKER_HOST": "0.0.0.0",
+  "CLAUDE_MEM_WORKER_PORT": "37777",
+  "CLAUDE_MEM_DATA_DIR": "/home/node/.claude-mem",
+  "CLAUDE_MEM_LOG_LEVEL": "INFO",
+  "CLAUDE_MEM_CHROMA_MODE": "local"
+}
