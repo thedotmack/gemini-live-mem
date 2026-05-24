@@ -8,18 +8,28 @@
 #
 #   Image:     claude-mem:basic
 #   Mode:      gemini-live   (mounted into the image's modes dir)
-#   Provider:  gemini        (claude-mem's OWN extraction model — see note below)
+#   Provider:  claude        (Anthropic Claude WRITES the observations, same as
+#                             the host worker — see AUTH below)
 #   Reachable: http://127.0.0.1:${HOST_PORT:-37778}   (host :37777 is the real worker)
 #
-# TWO SEPARATE MODELS, do not conflate:
-#   * The Gemini Live conversation model lives in ../.env (MODEL=...) and powers
-#     the live voice/video app. This script never touches it.
-#   * CLAUDE_MEM_GEMINI_MODEL in settings.json is the model claude-mem uses to
-#     EXTRACT observations from turns. It is claude-mem's own concern.
+# MODE NAME != PROVIDER (this is the trap that kept biting us):
+#   "gemini-live" is only the MODE — it describes WHAT we observe (a Gemini Live
+#   session). It does NOT mean the observer should run on Gemini. The observer
+#   PROVIDER is `claude` (CLAUDE_MEM_MODEL=claude-sonnet-4-6 in settings.json),
+#   exactly like the host worker. Do not "fix" this back to gemini.
 #
-# ONE API KEY: sourced from ../.env (GEMINI_API_KEY) and injected into the
-# settings file the container reads. claude-mem's Settings loader reads ONLY
-# settings.json (not env vars), so the key must be written into that file.
+# DO NOT CONFLATE THE TWO MODELS:
+#   * The Gemini Live CONVERSATION model lives in ../.env (MODEL=...) and powers
+#     the live voice/video app. This script never touches it.
+#   * The OBSERVER/EXTRACTION model is claude-mem's concern: CLAUDE_MEM_MODEL.
+#
+# AUTH: the `claude` provider uses Claude Code subscription (OAuth), not an API
+# key. The container has no keychain, so we extract the host's OAuth creds
+# (keychain 'Claude Code-credentials', else ~/.claude/.credentials.json), mount
+# them read-only, and the image entrypoint copies them into ~/.claude. This
+# mirrors claude-mem's shipped docker/claude-mem/run.sh. NOTE: OAuth tokens
+# expire — re-run this script to refresh the creds before a long idle gap.
+# (GEMINI_API_KEY from ../.env is still injected, for the Python vision captioner.)
 
 set -euo pipefail
 
@@ -41,6 +51,32 @@ if [[ -z "$GEMINI_API_KEY" ]]; then
   exit 1
 fi
 echo "[start] using GEMINI_API_KEY from .env (…${GEMINI_API_KEY: -6})"
+
+# --- Claude subscription auth: extract the host OAuth creds for the worker -----
+# The `claude` provider authenticates via Claude Code's OAuth token. The isolated
+# container has no keychain, so extract the host creds and mount them in (same
+# approach as claude-mem's shipped docker/claude-mem/run.sh). The host filename is
+# irrelevant — it is mounted to /auth/.credentials.json and the entrypoint copies
+# it to ~/.claude/.credentials.json inside the container.
+AUTH_DIR="$DIR/.auth"
+mkdir -p "$AUTH_DIR" && chmod 700 "$AUTH_DIR"
+CREDS_FILE="$(mktemp "$AUTH_DIR/creds.XXXXXX")"
+trap 'rm -f "$CREDS_FILE"' EXIT
+creds_ok=0
+if [[ "$(uname)" == "Darwin" ]] \
+   && security find-generic-password -s 'Claude Code-credentials' -w > "$CREDS_FILE" 2>/dev/null \
+   && [[ -s "$CREDS_FILE" ]]; then
+  creds_ok=1
+elif [[ -f "$HOME/.claude/.credentials.json" ]]; then
+  cp "$HOME/.claude/.credentials.json" "$CREDS_FILE" && creds_ok=1
+fi
+if [[ "$creds_ok" -ne 1 ]]; then
+  echo "[start] ERROR: no Claude OAuth creds (keychain 'Claude Code-credentials' or ~/.claude/.credentials.json)." >&2
+  echo "        Run 'claude login' on the host, or set CLAUDE_MEM_PROVIDER=gemini in settings.json to fall back." >&2
+  exit 1
+fi
+chmod 600 "$CREDS_FILE"
+echo "[start] extracted Claude OAuth creds for provider=claude (subscription auth)"
 
 mkdir -p "$DATA"
 
@@ -112,9 +148,11 @@ fi
 echo "[start] launching $NAME ($TAG) -> http://127.0.0.1:${HOST_PORT}"
 docker run -d --name "$NAME" \
   -p "${HOST_PORT}:37777" \
+  -e CLAUDE_MEM_CREDENTIALS_FILE=/auth/.credentials.json \
+  -v "$CREDS_FILE:/auth/.credentials.json:ro" \
   -v "$DATA:/home/node/.claude-mem" \
   -v "$DIR/gemini-live.json:/opt/claude-mem/modes/gemini-live.json:ro" \
-  "${SCRIPTS_MOUNT[@]}" \
+  ${SCRIPTS_MOUNT[@]+"${SCRIPTS_MOUNT[@]}"} \
   "$TAG" \
   bun /opt/claude-mem/scripts/worker-service.cjs --daemon
 
