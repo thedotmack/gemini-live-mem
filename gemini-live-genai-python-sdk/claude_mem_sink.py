@@ -24,6 +24,8 @@ import httpx
 from google import genai
 from google.genai import types
 
+from prompts import PROMPTS
+
 logger = logging.getLogger(__name__)
 
 # The synthetic tool name a conversational turn is recorded under.
@@ -35,16 +37,9 @@ PLATFORM_SOURCE = "gemini-live"
 # The captioner is deliberately dumb: it turns the current frame into a plain
 # textual representation (or NO_CHANGE). ALL judgement about what is worth
 # remembering / what to skip lives in the observer mode (gemini-live.json).
-NO_CHANGE_TOKEN = "NO_CHANGE"
-VISION_PROMPT = (
-    "You are an automatic camera feed for a memory system. Describe what is "
-    "currently visible in this frame in 1-3 concise, plain sentences — who is "
-    "present, what they are doing, and the setting around them. Report only "
-    "what you can see; do not editorialize.\n"
-    'Previous description: "{prev}"\n'
-    "If this frame is materially the same as the previous description (same "
-    "people, same activity, same setting), reply with exactly: " + NO_CHANGE_TOKEN
-)
+# Both the prompt and the delta-gate token come from prompts.json.
+NO_CHANGE_TOKEN = PROMPTS["vision_captioner"]["no_change_token"]
+VISION_PROMPT = PROMPTS["vision_captioner"]["prompt"]
 
 
 # Talk of planning an event (party, wedding, dinner, gathering...) triggers an
@@ -143,7 +138,7 @@ class MemorySink:
             {
                 "contentSessionId": self.content_session_id,
                 "project": self.project,
-                "prompt": "Gemini Live session",
+                "prompt": PROMPTS["session"]["init_prompt_label"],
                 "platformSource": PLATFORM_SOURCE,
             },
         )
@@ -242,7 +237,10 @@ class MemorySink:
             model=self.vision_model,
             contents=[
                 types.Part.from_bytes(data=jpeg_bytes, mime_type="image/jpeg"),
-                types.Part(text=VISION_PROMPT.format(prev=self._prev_caption or "(none yet)")),
+                types.Part(text=VISION_PROMPT.format(
+                    prev=self._prev_caption or "(none yet)",
+                    no_change_token=NO_CHANGE_TOKEN,
+                )),
             ],
         )
         return (response.text or "").strip()
@@ -321,14 +319,8 @@ class MemorySink:
 
     async def _extract_event_details(self, conversation):
         """Pull structured event details + an art-direction prompt from the talk."""
-        prompt = (
-            "The people in this conversation are planning an event. Extract the "
-            "event into a JSON object with EXACTLY these string keys: title, date, "
-            "time, location, host, guests, description, image_prompt. Use an empty "
-            "string for anything not mentioned. 'image_prompt' must be a vivid, "
-            "concrete art-direction description for a beautiful, themed event "
-            "invitation image. Respond with ONLY the JSON object, no prose.\n\n"
-            "Conversation:\n" + conversation
+        prompt = PROMPTS["event_invitation"]["extraction_prompt"].format(
+            conversation=conversation
         )
         response = await self._genai.aio.models.generate_content(
             model=self.vision_model,
@@ -346,23 +338,24 @@ class MemorySink:
         base64-encoded text (NOT raw bytes), so we pass it straight to the
         browser as a data URL; if a future SDK returns raw bytes we b64-encode.
         """
+        render = PROMPTS["event_invitation"]["image_render"]
+        labels = render["field_labels"]
+
         def field(key, label):
             value = (details.get(key) or "").strip()
             return f"{label}: {value}\n" if value else ""
 
-        title = (details.get("title") or "You are invited!").strip()
+        title = (details.get("title") or render["default_title"]).strip()
         prompt = (
-            "Design a single, finished event invitation graphic in portrait "
-            "orientation. Render this text legibly and beautifully integrated into "
-            "the artwork (spell everything correctly):\n"
-            f"{title}\n"
-            + field("date", "Date")
-            + field("time", "Time")
-            + field("location", "Location")
-            + field("host", "Hosted by")
-            + "\nArt direction: "
-            + (details.get("image_prompt") or "warm, festive, inviting, tasteful")
-            + ". Include themed decorative imagery. Polished invitation/poster layout."
+            render["intro"]
+            + f"\n{title}\n"
+            + field("date", labels["date"])
+            + field("time", labels["time"])
+            + field("location", labels["location"])
+            + field("host", labels["host"])
+            + render["art_direction_prefix"]
+            + (details.get("image_prompt") or render["default_art_direction"])
+            + render["closing"]
         )
         response = await self._genai.aio.models.generate_content(
             model=self.invitation_model,
@@ -398,12 +391,18 @@ class MemorySink:
         )
         return self._mcp_text(data).strip()
 
-    async def fetch_timeline(self, limit=20):
-        """Return a markdown timeline of the most recent observations."""
-        anchor = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    async def fetch_timeline(self, limit=1000):
+        """Return recent session observations across this and past sessions.
+
+        Uses /api/context/recent (limit = number of recent sessions), which
+        returns the full observation text grouped by session. We deliberately
+        avoid /api/timeline: that endpoint is hard-capped at a ±10 record window
+        around its anchor and ignores limit, so it could only ever surface ~10
+        observations no matter what the caller asked for.
+        """
         data = await self._get_json(
-            "/api/timeline",
-            {"project": self.project, "anchor": anchor, "limit": limit},
+            "/api/context/recent",
+            {"project": self.project, "limit": limit},
         )
         return self._mcp_text(data).strip() or "No timeline is available yet."
 
@@ -424,40 +423,30 @@ class MemorySink:
 
     def live_tools(self):
         """Return (tools, tool_mapping) exposing memory recall to Gemini Live."""
+        tool_prompts = PROMPTS["memory_tools"]
         timeline_decl = types.FunctionDeclaration(
             name="get_memory_timeline",
-            description=(
-                "Look up the timeline of what has recently happened and been "
-                "observed across this and past sessions (who was present, what "
-                "was done, what was discussed). Call this FIRST whenever the user "
-                "asks about what happened or anything from the past. Returns "
-                "observations with their numeric IDs, times, types, and titles."
-            ),
+            description=tool_prompts["get_memory_timeline"]["description"],
             parameters=types.Schema(
                 type=types.Type.OBJECT,
                 properties={
                     "limit": types.Schema(
                         type=types.Type.INTEGER,
-                        description="How many timeline entries to return (default 20).",
+                        description=tool_prompts["get_memory_timeline"]["param_limit_description"],
                     ),
                 },
             ),
         )
         observations_decl = types.FunctionDeclaration(
             name="get_memory_observations",
-            description=(
-                "Get the full details (subtitle and facts) of specific "
-                "observations by their numeric IDs. Use this AFTER "
-                "get_memory_timeline, only when the timeline titles are not "
-                "enough to answer the user."
-            ),
+            description=tool_prompts["get_memory_observations"]["description"],
             parameters=types.Schema(
                 type=types.Type.OBJECT,
                 properties={
                     "ids": types.Schema(
                         type=types.Type.ARRAY,
                         items=types.Schema(type=types.Type.INTEGER),
-                        description="The numeric observation IDs to fetch, e.g. [193, 194].",
+                        description=tool_prompts["get_memory_observations"]["param_ids_description"],
                     ),
                 },
                 required=["ids"],
@@ -470,11 +459,11 @@ class MemorySink:
         }
         return tools, mapping
 
-    async def _tool_get_timeline(self, limit=20):
+    async def _tool_get_timeline(self, limit=1000):
         try:
             limit = int(limit)
         except (ValueError, TypeError):
-            limit = 20
+            limit = 1000
         return await self.fetch_timeline(limit=limit)
 
     async def _tool_get_observations(self, ids=None):

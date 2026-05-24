@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from gemini_live import GeminiLive
+from prompts import PROMPTS
 from twilio_handler import TwilioHandler
 
 # Load environment variables
@@ -133,7 +134,7 @@ async def twilio_inbound():
     host = TWILIO_APP_HOST or "localhost:8000"
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say>Connecting to Gemini Live.</Say>
+    <Say>{PROMPTS["telephony"]["connect_say"]}</Say>
     <Connect>
         <Stream url="wss://{host}/twilio/stream" />
     </Connect>
@@ -156,7 +157,7 @@ async def twilio_outbound(
 
     client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
     twiml = f"""<Response>
-    <Say>Connecting to Gemini Live.</Say>
+    <Say>{PROMPTS["telephony"]["connect_say"]}</Say>
     <Connect>
         <Stream url="wss://{TWILIO_APP_HOST}/twilio/stream" />
     </Connect>
