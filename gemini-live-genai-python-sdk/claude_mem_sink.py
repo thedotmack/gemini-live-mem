@@ -18,6 +18,7 @@ import logging
 import os
 import re
 import uuid
+from datetime import datetime, timezone
 
 import httpx
 from google import genai
@@ -111,13 +112,23 @@ class MemorySink:
             os.getenv("CLAUDE_MEM_INVITATION_ENABLED", "true").lower() in ("1", "true", "yes", "on")
             and bool(gemini_api_key)
         )
+        # Image generation can go through TokenRouter (an OpenAI-compatible
+        # gateway, where the paid image quota lives) or the native google-genai
+        # SDK. If TOKENROUTER_API_KEY is set we route through it; models then
+        # need the "google/" prefix.
+        self.tokenrouter_api_key = os.getenv("TOKENROUTER_API_KEY", "")
+        self.tokenrouter_base_url = os.getenv(
+            "TOKENROUTER_BASE_URL", "https://api.tokenrouter.com/v1"
+        ).rstrip("/")
         # Default to Nano Banana 2 (flash, legible in-image text — best for
-        # invitations). Needs a paid image-gen quota. Override with
-        # CLAUDE_MEM_INVITATION_MODEL (e.g. gemini-3-pro-image-preview for the
-        # sharpest text, or gemini-2.5-flash-image as a validated fallback).
-        self.invitation_model = os.getenv(
-            "CLAUDE_MEM_INVITATION_MODEL", "gemini-3.1-flash-image-preview"
+        # invitations). Override with CLAUDE_MEM_INVITATION_MODEL (e.g.
+        # google/gemini-3-pro-image-preview for the sharpest text).
+        default_invitation_model = (
+            "google/gemini-3.1-flash-image-preview"
+            if self.tokenrouter_api_key
+            else "gemini-3.1-flash-image-preview"
         )
+        self.invitation_model = os.getenv("CLAUDE_MEM_INVITATION_MODEL", default_invitation_model)
         self.invitation_aspect_ratio = os.getenv("CLAUDE_MEM_INVITATION_ASPECT_RATIO", "3:4")
         # Async callback (set by GeminiLive) that pushes an event to the frontend.
         self.emit = None
@@ -374,6 +385,130 @@ class MemorySink:
                 return data, mime_type
         return None, None
 
+    # --- claude-mem read access (session-start context + recall tools) --------
+    async def fetch_session_start_context(self, limit=8):
+        """Return the standard claude-mem 'recent session context' as markdown.
+
+        This is the same recent-session summary the SessionStart hook injects;
+        we feed it into the Gemini system prompt so the assistant starts each
+        session already knowing what it recently saw. Fail-soft: returns "".
+        """
+        data = await self._get_json(
+            "/api/context/recent", {"project": self.project, "limit": limit}
+        )
+        return self._mcp_text(data).strip()
+
+    async def fetch_timeline(self, limit=20):
+        """Return a markdown timeline of the most recent observations."""
+        anchor = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        data = await self._get_json(
+            "/api/timeline",
+            {"project": self.project, "anchor": anchor, "limit": limit},
+        )
+        return self._mcp_text(data).strip() or "No timeline is available yet."
+
+    async def fetch_observations(self, ids):
+        """Return readable details for the given observation IDs."""
+        parsed_ids = []
+        for raw_id in ids or []:
+            try:
+                parsed_ids.append(int(raw_id))
+            except (ValueError, TypeError):
+                continue
+        if not parsed_ids:
+            return "No valid observation IDs were provided."
+        items = await self._post_json("/api/observations/batch", {"ids": parsed_ids})
+        if not isinstance(items, list) or not items:
+            return "Could not find those observations."
+        return self._format_observations(items)
+
+    def live_tools(self):
+        """Return (tools, tool_mapping) exposing memory recall to Gemini Live."""
+        timeline_decl = types.FunctionDeclaration(
+            name="get_memory_timeline",
+            description=(
+                "Look up the timeline of what has recently happened and been "
+                "observed across this and past sessions (who was present, what "
+                "was done, what was discussed). Call this FIRST whenever the user "
+                "asks about what happened or anything from the past. Returns "
+                "observations with their numeric IDs, times, types, and titles."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "limit": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="How many timeline entries to return (default 20).",
+                    ),
+                },
+            ),
+        )
+        observations_decl = types.FunctionDeclaration(
+            name="get_memory_observations",
+            description=(
+                "Get the full details (subtitle and facts) of specific "
+                "observations by their numeric IDs. Use this AFTER "
+                "get_memory_timeline, only when the timeline titles are not "
+                "enough to answer the user."
+            ),
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "ids": types.Schema(
+                        type=types.Type.ARRAY,
+                        items=types.Schema(type=types.Type.INTEGER),
+                        description="The numeric observation IDs to fetch, e.g. [193, 194].",
+                    ),
+                },
+                required=["ids"],
+            ),
+        )
+        tools = [types.Tool(function_declarations=[timeline_decl, observations_decl])]
+        mapping = {
+            "get_memory_timeline": self._tool_get_timeline,
+            "get_memory_observations": self._tool_get_observations,
+        }
+        return tools, mapping
+
+    async def _tool_get_timeline(self, limit=20):
+        try:
+            limit = int(limit)
+        except (ValueError, TypeError):
+            limit = 20
+        return await self.fetch_timeline(limit=limit)
+
+    async def _tool_get_observations(self, ids=None):
+        return await self.fetch_observations(ids)
+
+    @staticmethod
+    def _mcp_text(data):
+        """Pull the text payload out of an MCP-style {content:[{text}]} response."""
+        if isinstance(data, dict):
+            content = data.get("content")
+            if isinstance(content, list) and content:
+                return content[0].get("text", "") or ""
+        return ""
+
+    @staticmethod
+    def _format_observations(items):
+        lines = []
+        for obs in items:
+            lines.append(
+                f"#{obs.get('id')} [{obs.get('type', '')}] "
+                f"{obs.get('title') or '(untitled)'}"
+            )
+            subtitle = obs.get("subtitle")
+            if subtitle:
+                lines.append(f"  {subtitle}")
+            facts = obs.get("facts")
+            if facts:
+                try:
+                    for fact in json.loads(facts):
+                        lines.append(f"  - {fact}")
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        return "\n".join(lines) if lines else "No matching observations found."
+
     async def _post_observation(self, tool_name, tool_input, tool_response):
         await self._post(
             "/api/sessions/observations",
@@ -386,6 +521,30 @@ class MemorySink:
                 "platformSource": PLATFORM_SOURCE,
             },
         )
+
+    async def _get_json(self, path, params=None):
+        """GET JSON from the worker, swallowing every error (returns None)."""
+        try:
+            response = await self._client.get(f"{self.worker_url}{path}", params=params)
+            if response.status_code >= 400:
+                logger.warning(f"claude-mem {path} -> {response.status_code}: {response.text[:200]}")
+                return None
+            return response.json()
+        except Exception as e:
+            logger.debug(f"claude-mem GET {path} failed: {e}")
+            return None
+
+    async def _post_json(self, path, body):
+        """POST JSON to the worker and return the parsed response (or None)."""
+        try:
+            response = await self._client.post(f"{self.worker_url}{path}", json=body)
+            if response.status_code >= 400:
+                logger.warning(f"claude-mem {path} -> {response.status_code}: {response.text[:200]}")
+                return None
+            return response.json()
+        except Exception as e:
+            logger.debug(f"claude-mem POST {path} failed: {e}")
+            return None
 
     async def _post(self, path, body):
         """POST to the worker, swallowing every error. Never disturbs the session."""

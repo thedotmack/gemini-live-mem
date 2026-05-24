@@ -1,7 +1,7 @@
 {
   "name": "Gemini Live Presence",
   "description": "Builds an understanding of the person (and the people they are with) from a live Gemini Live voice/video session: what is seen, how they behave, and what is said.",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "observation_types": [
     {
       "id": "person",
@@ -44,6 +44,20 @@
       "description": "The substance of what was said: a topic raised, a question answered, a decision, or a stated fact",
       "emoji": "💬",
       "work_emoji": "🗣️"
+    },
+    {
+      "id": "security_alert",
+      "label": "Security Alert",
+      "description": "A security issue that needs attention before continuing.",
+      "emoji": "🚨",
+      "work_emoji": "🚨"
+    },
+    {
+      "id": "security_note",
+      "label": "Security Note",
+      "description": "A security-relevant observation worth recording, but not urgent.",
+      "emoji": "🔐",
+      "work_emoji": "🔐"
     },
     {
       "id": "tool-call",
