@@ -32,6 +32,44 @@ class GeminiLive:
         self.tool_mapping = tool_mapping or {}
 
     async def start_session(self, audio_input_queue, video_input_queue, text_input_queue, audio_output_callback, audio_interrupt_callback=None):
+        # Bring the memory sink up before connecting so we can (a) inject the
+        # standard claude-mem session-start context into the system prompt and
+        # (b) register the memory-recall tools. Created once here and reused for
+        # the whole session.
+        memory_sink = make_memory_sink_if_enabled()
+
+        system_instruction_text = (
+            "You are a helpful AI assistant. Keep your responses concise. Speak "
+            "in a friendly Irish accent. You can see the user's camera or screen "
+            "which is shared as realtime input images with you."
+        )
+        tools = list(self.tools)
+        tool_mapping = dict(self.tool_mapping)
+
+        if memory_sink:
+            session_start_context = await memory_sink.fetch_session_start_context()
+            if session_start_context:
+                system_instruction_text += (
+                    "\n\n# Your memory of past sessions (claude-mem)\n"
+                    "This is the recent context loaded at the start of this "
+                    "session — treat it as things you already remember:\n\n"
+                    + session_start_context
+                )
+            system_instruction_text += (
+                "\n\n# Recalling what happened\n"
+                "You have a long-term memory you can query with two tools. When "
+                "the user asks about what happened, what was done, who was "
+                "present, or anything from this or a past session: FIRST call "
+                "get_memory_timeline to see the timeline of recent observations. "
+                "THEN, only if the timeline titles don't give you enough detail, "
+                "call get_memory_observations with the specific observation IDs "
+                "from that timeline to read their full details. Never call "
+                "get_memory_observations before getting a timeline."
+            )
+            memory_tools, memory_tool_mapping = memory_sink.live_tools()
+            tools.extend(memory_tools)
+            tool_mapping.update(memory_tool_mapping)
+
         config = types.LiveConnectConfig(
             response_modalities=[types.Modality.AUDIO],
             speech_config=types.SpeechConfig(
@@ -41,13 +79,13 @@ class GeminiLive:
                     )
                 )
             ),
-            system_instruction=types.Content(parts=[types.Part(text="You are a helpful AI assistant. Keep your responses concise. Speak in a friendly Irish accent. You can see the user's camera or screen which is shared as realtime input images with you.")]),
+            system_instruction=types.Content(parts=[types.Part(text=system_instruction_text)]),
             input_audio_transcription=types.AudioTranscriptionConfig(),
             output_audio_transcription=types.AudioTranscriptionConfig(),
             realtime_input_config=types.RealtimeInputConfig(
                 turn_coverage="TURN_INCLUDES_ONLY_ACTIVITY",
             ),
-            tools=self.tools,
+            tools=tools,
         )
         
         logger.info(f"Connecting to Gemini Live with model={self.model}")
@@ -55,7 +93,6 @@ class GeminiLive:
           async with self.client.aio.live.connect(model=self.model, config=config) as session:
             logger.info("Gemini Live session opened successfully")
 
-            memory_sink = make_memory_sink_if_enabled()
             if memory_sink:
                 await memory_sink.on_session_start()
 
@@ -76,6 +113,9 @@ class GeminiLive:
                     while True:
                         chunk = await video_input_queue.get()
                         logger.info(f"Sending video frame to Gemini: {len(chunk)} bytes")
+                        # Tee the exact frame to the memory captioner (no-op if disabled).
+                        if memory_sink:
+                            memory_sink.note_latest_frame(chunk)
                         await session.send_realtime_input(
                             video=types.Blob(data=chunk, mime_type="image/jpeg")
                         )
@@ -96,6 +136,10 @@ class GeminiLive:
                     logger.error(f"send_text error: {e}\n{traceback.format_exc()}")
 
             event_queue = asyncio.Queue()
+            # Let the memory sink push events (e.g. event invitations) back to
+            # the frontend through the same queue the receive loop drains.
+            if memory_sink:
+                memory_sink.emit = event_queue.put
 
             async def receive_loop():
                 try:
@@ -144,9 +188,9 @@ class GeminiLive:
                                     func_name = fc.name
                                     args = fc.args or {}
                                     
-                                    if func_name in self.tool_mapping:
+                                    if func_name in tool_mapping:
                                         try:
-                                            tool_func = self.tool_mapping[func_name]
+                                            tool_func = tool_mapping[func_name]
                                             if inspect.iscoroutinefunction(tool_func):
                                                 result = await tool_func(**args)
                                             else:
