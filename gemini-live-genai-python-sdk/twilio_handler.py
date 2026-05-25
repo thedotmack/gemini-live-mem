@@ -4,6 +4,7 @@ import json
 import logging
 import audioop
 from gemini_live import GeminiLive
+from prompts import PROMPTS
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ class TwilioHandler:
                     logger.info(f"Twilio Stream started — streamSid={self.stream_sid}, callSid={call_sid}")
                     logger.info(f"Stream metadata: {json.dumps(data['start'], indent=2)}")
                     # Send initial prompt so the agent greets the caller
-                    await text_input_queue.put("Greet the caller and ask how you can help them.")
+                    await text_input_queue.put(PROMPTS["telephony"]["greeting_prompt"])
                 elif event == "media":
                     payload = data["media"]["payload"]
                     mulaw_data = base64.b64decode(payload)

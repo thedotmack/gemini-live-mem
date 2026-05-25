@@ -1,2 +1,4 @@
 # Runtime data dir (DB, logs, and the generated settings.json WITH the real key).
 data/
+# Transient Claude OAuth creds extracted from the host keychain at launch.
+.auth/

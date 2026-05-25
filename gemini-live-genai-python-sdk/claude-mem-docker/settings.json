@@ -1,6 +1,8 @@
 {
   "CLAUDE_MEM_MODE": "gemini-live",
-  "CLAUDE_MEM_PROVIDER": "gemini",
+  "CLAUDE_MEM_PROVIDER": "claude",
+  "CLAUDE_MEM_CLAUDE_AUTH_METHOD": "subscription",
+  "CLAUDE_MEM_MODEL": "claude-sonnet-4-6",
   "CLAUDE_MEM_GEMINI_API_KEY": "__INJECTED_FROM_ENV__",
   "CLAUDE_MEM_GEMINI_MODEL": "gemini-2.5-flash",
   "CLAUDE_MEM_GEMINI_RATE_LIMITING_ENABLED": "false",

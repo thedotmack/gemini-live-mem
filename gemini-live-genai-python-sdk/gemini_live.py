@@ -8,6 +8,7 @@ from google import genai
 from google.genai import types
 
 from claude_mem_sink import make_memory_sink_if_enabled
+from prompts import PROMPTS
 
 class GeminiLive:
     """
@@ -38,34 +39,18 @@ class GeminiLive:
         # the whole session.
         memory_sink = make_memory_sink_if_enabled()
 
-        system_instruction_text = (
-            "You are a helpful AI assistant. Keep your responses concise. Speak "
-            "in a friendly Irish accent. You can see the user's camera or screen "
-            "which is shared as realtime input images with you."
-        )
+        live = PROMPTS["live_assistant"]
+        system_instruction_text = live["system_instruction_base"]
         tools = list(self.tools)
         tool_mapping = dict(self.tool_mapping)
 
         if memory_sink:
             session_start_context = await memory_sink.fetch_session_start_context()
             if session_start_context:
-                system_instruction_text += (
-                    "\n\n# Your memory of past sessions (claude-mem)\n"
-                    "This is the recent context loaded at the start of this "
-                    "session — treat it as things you already remember:\n\n"
-                    + session_start_context
+                system_instruction_text += live["memory_context_section"].replace(
+                    "{session_start_context}", session_start_context
                 )
-            system_instruction_text += (
-                "\n\n# Recalling what happened\n"
-                "You have a long-term memory you can query with two tools. When "
-                "the user asks about what happened, what was done, who was "
-                "present, or anything from this or a past session: FIRST call "
-                "get_memory_timeline to see the timeline of recent observations. "
-                "THEN, only if the timeline titles don't give you enough detail, "
-                "call get_memory_observations with the specific observation IDs "
-                "from that timeline to read their full details. Never call "
-                "get_memory_observations before getting a timeline."
-            )
+            system_instruction_text += live["memory_recall_instructions"]
             memory_tools, memory_tool_mapping = memory_sink.live_tools()
             tools.extend(memory_tools)
             tool_mapping.update(memory_tool_mapping)
@@ -75,7 +60,7 @@ class GeminiLive:
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                        voice_name="Puck"
+                        voice_name=live["voice_name"]
                     )
                 )
             ),
