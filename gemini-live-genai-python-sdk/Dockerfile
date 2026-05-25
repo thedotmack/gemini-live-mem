@@ -1,27 +1,38 @@
-# Use an official Python runtime as a parent image
-FROM python:3.11-slim
+# Combined image: Gemini Live FastAPI app (Python 3.11) + claude-mem worker (Bun).
+# Base is Node 22 on Debian bookworm, whose apt `python3` is 3.11 — required
+# because twilio_handler.py imports `audioop`, removed from CPython 3.13+.
+FROM node:22-bookworm-slim
 
-# Set the working directory in the container
-WORKDIR /app
-
-# Install system dependencies if needed (e.g., for audio libraries)
-RUN apt-get update && apt-get install -y \
-    build-essential \
+# System deps: Python 3.11 + venv/pip, build tools (native wheels), curl/unzip
+# (Bun installer), tini (PID 1 init that reaps the backgrounded worker).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-venv python3-pip build-essential curl unzip ca-certificates tini \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the requirements file into the container
+# Bun — the claude-mem worker runs under Bun (uses bun:sqlite, no native build).
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:${PATH}"
+
+# claude-mem (pinned). Installs the CLI + bundled worker plugin globally.
+RUN npm install -g claude-mem@13.3.0
+
+WORKDIR /app
+
+# Python deps in an isolated venv (bookworm pip is externally-managed / PEP 668).
 COPY requirements.txt .
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+ENV PATH="/opt/venv/bin:${PATH}"
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the current directory contents into the container at /app
+# App source.
 COPY . .
 
-# Make port 8080 available to the world outside this container
-# Cloud Run sets the PORT environment variable to 8080 by default
+# Register the custom "gemini-live" observer mode with claude-mem.
+RUN cp claude-mem-docker/gemini-live.json \
+    "$(npm root -g)/claude-mem/plugin/modes/gemini-live.json"
+
+ENV PORT=8080
 EXPOSE 8080
 
-# Run main.py when the container launches
-# We bind to 0.0.0.0 so it's accessible within the container
-CMD ["python", "main.py"]
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["bash", "/app/docker-entrypoint.sh"]

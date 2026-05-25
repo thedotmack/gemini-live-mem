@@ -9,3 +9,5 @@ __pycache__
 .db
 .DS_Store
 frontend/node_modules
+claude-mem-docker/data
+claude-mem-docker/.auth

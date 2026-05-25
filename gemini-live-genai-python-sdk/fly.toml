@@ -1,0 +1,35 @@
+# Fly.io config for the Gemini Live + claude-mem app.
+# Single always-on machine: the app and the claude-mem worker share localhost,
+# and the memory DB lives on a volume that can only attach to one machine — so
+# this app must NOT scale horizontally.
+app = "gemini-live-mem"
+primary_region = "iad"
+
+[build]
+
+[env]
+  PORT = "8080"
+  CLAUDE_MEM_DATA_DIR = "/data/claude-mem"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Keep the machine up: live WebSocket sessions and the in-process worker must
+  # not be suspended mid-call.
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 200
+    soft_limit = 150
+
+# Persist the claude-mem database (SQLite + logs) across restarts/deploys.
+[[mounts]]
+  source = "claude_mem_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1024"
