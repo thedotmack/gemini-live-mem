@@ -18,10 +18,26 @@ const chatLog = document.getElementById("chat-log");
 const modelFeed = document.getElementById("model-feed");
 const modelFrame = document.getElementById("model-frame");
 const modelFeedStats = document.getElementById("model-feed-stats");
+const memoryFeedList = document.getElementById("memory-feed-list");
+const memoryFeedCount = document.getElementById("memory-feed-count");
 
 let currentGeminiMessageDiv = null;
 let currentUserMessageDiv = null;
 let modelFrameCount = 0;
+let memoryCount = 0;
+
+// Observation type -> emoji, matching the worker's gemini-live.json mode.
+const OBS_EMOJI = {
+  person: "🧑",
+  companion: "👥",
+  behavior: "🎭",
+  appearance: "👤",
+  environment: "🏠",
+  conversation: "💬",
+  security_alert: "🚨",
+  security_note: "🔐",
+  "tool-call": "🔧",
+};
 
 // Send a captured frame to Gemini AND mirror it in the picture-in-picture
 // feed so you can see exactly what the model receives. Shared by camera + screen.
@@ -107,6 +123,8 @@ function handleJsonMessage(msg) {
     }
   } else if (msg.type === "event_invitation") {
     appendInvitation(msg);
+  } else if (msg.type === "observation") {
+    appendObservation(msg.observation);
   }
 }
 
@@ -135,6 +153,46 @@ function appendInvitation(msg) {
 
   chatLog.appendChild(card);
   chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+// Render one live memory observation into the left-panel memory feed.
+// Uses textContent only — observation titles/subtitles are model-generated.
+function appendObservation(obs) {
+  if (!obs || !obs.title) return;
+
+  const placeholder = memoryFeedList.querySelector(".memory-empty");
+  if (placeholder) placeholder.remove();
+
+  const item = document.createElement("div");
+  item.className = "memory-item";
+  if (obs.obs_type) item.dataset.type = obs.obs_type;
+
+  const icon = document.createElement("span");
+  icon.className = "memory-item-icon";
+  icon.textContent = OBS_EMOJI[obs.obs_type] || "🧠";
+  item.appendChild(icon);
+
+  const body = document.createElement("div");
+  body.className = "memory-item-body";
+
+  const title = document.createElement("div");
+  title.className = "memory-item-title";
+  title.textContent = obs.title;
+  body.appendChild(title);
+
+  if (obs.subtitle) {
+    const subtitle = document.createElement("div");
+    subtitle.className = "memory-item-subtitle";
+    subtitle.textContent = obs.subtitle;
+    body.appendChild(subtitle);
+  }
+
+  item.appendChild(body);
+  memoryFeedList.appendChild(item);
+  memoryFeedList.scrollTop = memoryFeedList.scrollHeight;
+
+  memoryCount += 1;
+  memoryFeedCount.textContent = String(memoryCount);
 }
 
 function appendMessage(type, text) {
@@ -274,6 +332,10 @@ function resetUI() {
   cameraBtn.textContent = "Start Camera";
   screenBtn.textContent = "Share Screen";
   chatLog.innerHTML = "";
+  memoryFeedList.innerHTML =
+    '<div class="memory-empty">Watching… memories appear here as the session unfolds.</div>';
+  memoryCount = 0;
+  memoryFeedCount.textContent = "";
   connectBtn.disabled = false;
 }
 

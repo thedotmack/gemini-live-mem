@@ -418,3 +418,115 @@ input[type="text"] {
   flex-grow: 1;
   max-height: 400px;
 }
+
+/* Live memory feed — observations claude-mem extracts from the session,
+   streamed in as they form. Lives under the camera in the left panel. */
+.memory-feed {
+  margin-top: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--surface-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.memory-feed-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: var(--bg-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.memory-feed-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #34a853;
+  flex-shrink: 0;
+  animation: model-feed-pulse 1.5s infinite;
+}
+
+.memory-feed-count {
+  margin-left: auto;
+  min-width: 1.4rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  background: #e9ecef;
+  border-radius: 10px;
+  padding: 0 0.5rem;
+}
+
+.memory-feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.memory-empty {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 1rem 0.5rem;
+}
+
+.memory-item {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.5rem 0.6rem;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--primary-color);
+  border-radius: 6px;
+  animation: invitation-pop 0.3s ease-out;
+}
+
+.memory-item[data-type="security_alert"] {
+  border-left-color: var(--danger-color);
+}
+.memory-item[data-type="behavior"] {
+  border-left-color: #f4b400;
+}
+.memory-item[data-type="environment"] {
+  border-left-color: #0f9d58;
+}
+.memory-item[data-type="companion"] {
+  border-left-color: #a142f4;
+}
+
+.memory-item-icon {
+  font-size: 1rem;
+  line-height: 1.3;
+  flex-shrink: 0;
+}
+
+.memory-item-body {
+  min-width: 0;
+}
+
+.memory-item-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+
+.memory-item-subtitle {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  line-height: 1.35;
+}

@@ -83,6 +83,21 @@
                   Disconnect
                 </button>
               </div>
+
+              <!-- Live memory: the observations claude-mem extracts from this
+                   session, streamed in as they are formed. -->
+              <div class="memory-feed" id="memory-feed">
+                <div class="memory-feed-header">
+                  <span class="memory-feed-dot"></span>
+                  <span>Memory</span>
+                  <span class="memory-feed-count" id="memory-feed-count"></span>
+                </div>
+                <div class="memory-feed-list" id="memory-feed-list">
+                  <div class="memory-empty">
+                    Watching… memories appear here as the session unfolds.
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="right-panel">
