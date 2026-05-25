@@ -41,6 +41,11 @@ from browser import BrowserController
 # Do NOT use a "google/"-prefixed model with a native SDK client (repo bug #5).
 MODEL = "claude-sonnet-4-6"
 
+# When set, navigation is fail-closed: if the request carries no approval
+# decision, the agent rejects rather than proceeding. Default off keeps the
+# demo flow unblocked. See the HITL note in run loop / README known limitations.
+REQUIRE_APPROVAL = os.getenv("BROWSER_AGENT_REQUIRE_APPROVAL", "0") == "1"
+
 EmitFn = Callable[[Any], Awaitable[None]]
 
 SYSTEM_PROMPT = (
@@ -329,9 +334,16 @@ async def _run_live(input_data: RunAgentInput, emit: EmitFn) -> None:
                     finished = True
                     break
 
-                # HITL: navigate requires human approval. Emit a request_approval
-                # tool call and read the decision from the incoming messages; if
-                # none is present, auto-approve (MVP demo behavior).
+                # HITL: navigate surfaces a `request_approval` tool call so the UI
+                # renders the approve/reject card, then reads any decision the
+                # client already echoed back in the incoming messages.
+                #
+                # MVP limitation: one SSE run can't block on a click that only
+                # happens after the stream starts — true pause/resume needs
+                # cross-run state (follow-up; see README "Known limitations"). So:
+                #   explicit REJECT in request          -> reject
+                #   no decision + REQUIRE_APPROVAL set   -> fail closed (reject)
+                #   otherwise (approve, or no decision)  -> proceed (demo-friendly)
                 if name == "navigate":
                     approval_id = str(uuid.uuid4())
                     await _emit_tool_call(
@@ -345,13 +357,19 @@ async def _run_live(input_data: RunAgentInput, emit: EmitFn) -> None:
                         _new_state(status="waiting_approval", steps=list(steps)),
                     )
                     decision = _approval_from_input(input_data)
-                    if decision is False:
+                    rejected = decision is False or (decision is None and REQUIRE_APPROVAL)
+                    if rejected:
                         await _emit_tool_result(emit, approval_id, "REJECTED")
+                        reason = (
+                            "User rejected navigation."
+                            if decision is False
+                            else "Navigation blocked: approval required but not granted."
+                        )
                         tool_results.append(
                             {
                                 "type": "tool_result",
                                 "tool_use_id": tool_call_id,
-                                "content": "User rejected navigation.",
+                                "content": reason,
                             }
                         )
                         continue
@@ -378,11 +396,31 @@ async def _run_live(input_data: RunAgentInput, emit: EmitFn) -> None:
                     ),
                 )
                 await _emit_tool_result(emit, tool_call_id, result_text)
+                # Feed the captured page image back to Claude for the screenshot
+                # tool so the model can actually SEE the page (Anthropic
+                # tool_result image block). `shot` is a data URL:
+                # data:<media_type>;base64,<data>.
+                if name == "screenshot" and shot.startswith("data:") and ";base64," in shot:
+                    header, b64 = shot.split(";base64,", 1)
+                    media_type = header[len("data:"):] or "image/png"
+                    result_content: Any = [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": b64,
+                            },
+                        },
+                        {"type": "text", "text": result_text},
+                    ]
+                else:
+                    result_content = result_text
                 tool_results.append(
                     {
                         "type": "tool_result",
                         "tool_use_id": tool_call_id,
-                        "content": result_text,
+                        "content": result_content,
                     }
                 )
 

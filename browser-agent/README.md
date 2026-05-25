@@ -81,6 +81,16 @@ With **no `ANTHROPIC_API_KEY`** the agent streams a deterministic demo run (no C
 required), so you can see the full event flow end-to-end out of the box. Add the key (and
 `playwright install chromium`) for a real, Claude-driven browsing session.
 
+## Known limitations
+
+- **Live human-in-the-loop is not a hard pause yet.** The agent surfaces a
+  `request_approval` tool call (the approval card you see), but a single SSE run
+  can't block waiting for a click that happens after the stream starts — a true
+  pause/resume needs cross-run state. For MVP, navigation proceeds unless the
+  request already carries a reject. Set `BROWSER_AGENT_REQUIRE_APPROVAL=1` to make
+  it **fail closed** (reject when approval isn't present). Full interactive
+  resumption is a tracked follow-up.
+
 ## Status
 
 MVP v1. **Out of scope** (intentionally): auth, accounts, multi-session, persistence,

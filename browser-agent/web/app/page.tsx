@@ -30,17 +30,22 @@ export default function Page() {
     initialState: EMPTY_STATE,
   });
 
-  // Register the in-chat generative-UI hooks (live step feed + HITL approval).
-  ActionFeed();
-  ApprovalCard();
-
-  // If the agent hasn't populated state yet (or demo mode is on), use demo data.
+  // Live state wins; fall back to demo data only when the agent hasn't
+  // produced state yet, so a running backend is never shadowed by demo data.
   const hasLiveState = Boolean(state?.url || state?.steps?.length);
-  const viewState: BrowserAgentState =
-    !hasLiveState || DEMO_MODE ? demoState : state;
+  const viewState: BrowserAgentState = hasLiveState
+    ? state
+    : DEMO_MODE
+      ? demoState
+      : EMPTY_STATE;
 
   return (
     <div className="app">
+      {/* Hook-bearing components rendered as JSX (Rules of Hooks): their hooks
+          must attach to stable child instances, not be called inside Page().
+          Both register in-chat generative UI and render null in the tree. */}
+      <ActionFeed />
+      <ApprovalCard />
       <header className="appHeader">
         <div className="brand">
           <div className="brandMark">🛰️</div>
