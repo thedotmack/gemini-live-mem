@@ -1,0 +1,18 @@
+# Dependencies
+web/node_modules/
+agent/.venv/
+
+# Build output
+web/.next/
+web/out/
+
+# Python caches
+**/__pycache__/
+*.pyc
+
+# Env files (real secrets) — but keep the example
+.env
+.env.local
+.env*.local
+!.env.example
+!**/.env.example

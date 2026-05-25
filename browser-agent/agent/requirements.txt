@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+ag-ui-protocol>=0.1.18
+playwright
+anthropic
+python-dotenv

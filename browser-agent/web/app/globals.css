@@ -1,0 +1,617 @@
+/* ============================================================================
+   Browser Pilot — fly.io-inspired design kit (dark navy + violet).
+   Tokens copied from PLAN.md "Design kit"; CopilotKit theming via the
+   documented --copilot-kit-* custom properties under [data-theme="dark"].
+   ============================================================================ */
+
+:root {
+  /* fly.io palette */
+  --bg: #191034; /* fly navy */
+  --surface: #221646;
+  --surface-2: #2a1c54;
+  --border: #2b1f55;
+  --primary: #7c3aed;
+  --primary-hover: #6d28d9;
+  --violet-1: #996bec;
+  --violet-2: #ba7bf0;
+  --indigo: #5046e4;
+  --text: #f5f3ff;
+  --text-muted: #9698b6;
+  --text-dim: #676b89;
+  --mint: #6ee5c2;
+  --pink: #ff008a;
+  --amber: #ffc83a;
+  --grad: linear-gradient(135deg, #5046e4 0%, #996bec 55%, #ba7bf0 100%);
+
+  --radius: 0.625rem;
+  --radius-lg: 1rem;
+  --radius-full: 9999px;
+  --gap: 2rem;
+
+  /* font CSS vars are populated by next/font on <body>; these are fallbacks */
+  --font-heading: Georgia, "Times New Roman", serif;
+  --font-body: system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* --- Map CopilotKit theme variables onto the fly palette ------------------ */
+/* These names verified against @copilotkit/react-ui/dist/index.css.          */
+[data-theme="dark"] {
+  --copilot-kit-background-color: var(--surface);
+  --copilot-kit-secondary-color: var(--surface-2);
+  --copilot-kit-primary-color: var(--primary);
+  --copilot-kit-contrast-color: var(--text);
+  --copilot-kit-secondary-contrast-color: var(--text);
+  --copilot-kit-separator-color: var(--border);
+  --copilot-kit-muted-color: var(--text-muted);
+  --copilot-kit-input-background-color: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ambient gradient wash behind the whole app */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 40rem at 85% -10%, rgba(124, 58, 237, 0.22), transparent 60%),
+    radial-gradient(50rem 40rem at -10% 110%, rgba(80, 70, 228, 0.2), transparent 55%);
+}
+
+/* ============================================================================
+   App shell
+   ============================================================================ */
+
+.app {
+  position: relative;
+  z-index: 1;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+/* --- Header / wordmark ---------------------------------------------------- */
+.appHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.75rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(25, 16, 52, 0.7);
+  backdrop-filter: blur(10px);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.brandMark {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius);
+  background: var(--grad);
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.4);
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+}
+
+.wordmark {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1.4rem;
+  letter-spacing: -0.01em;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin: 0;
+  line-height: 1;
+}
+
+.tagline {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin-top: 0.2rem;
+}
+
+.protocolTag {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--violet-1);
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: rgba(124, 58, 237, 0.08);
+  white-space: nowrap;
+}
+
+/* --- Split pane ----------------------------------------------------------- */
+.split {
+  display: grid;
+  grid-template-columns: minmax(360px, 460px) 1fr;
+  min-height: 0;
+  gap: 0;
+}
+
+.chatPane {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: rgba(34, 22, 70, 0.45);
+}
+
+/* let CopilotChat fill the pane and inherit our fonts */
+.chatPane .copilotKitChat,
+.chatPane > div {
+  height: 100%;
+  font-family: var(--font-body);
+}
+
+.viewportPane {
+  min-height: 0;
+  overflow: auto;
+  padding: var(--gap);
+}
+
+/* ============================================================================
+   Browser viewport (right pane)
+   ============================================================================ */
+
+.viewport {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.viewportTop {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.viewportTitle {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text);
+}
+
+/* --- URL bar -------------------------------------------------------------- */
+.urlBar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.urlDots {
+  display: flex;
+  gap: 0.35rem;
+  margin-right: 0.25rem;
+}
+.urlDots span {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+}
+.urlDots span:nth-child(1) {
+  background: #ff5f57;
+}
+.urlDots span:nth-child(2) {
+  background: var(--amber);
+}
+.urlDots span:nth-child(3) {
+  background: var(--mint);
+}
+
+.urlLock {
+  color: var(--mint);
+  font-size: 0.75rem;
+}
+
+.urlText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.urlText .scheme {
+  color: var(--text-dim);
+}
+
+/* --- Screenshot frame ----------------------------------------------------- */
+.screenshotFrame {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 30px 60px -20px rgba(0, 0, 0, 0.55);
+  aspect-ratio: 16 / 10;
+}
+
+.screenshotFrame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.screenshotEmpty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+/* --- Status chip ---------------------------------------------------------- */
+.statusChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.statusDot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: var(--radius-full);
+  background: var(--text-dim);
+}
+
+.statusChip[data-status="thinking"],
+.statusChip[data-status="acting"] {
+  color: var(--violet-2);
+  border-color: rgba(124, 58, 237, 0.5);
+  background: rgba(124, 58, 237, 0.12);
+}
+.statusChip[data-status="thinking"] .statusDot,
+.statusChip[data-status="acting"] .statusDot {
+  background: var(--violet-2);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.statusChip[data-status="waiting_approval"] {
+  color: var(--amber);
+  border-color: rgba(255, 200, 58, 0.5);
+  background: rgba(255, 200, 58, 0.1);
+}
+.statusChip[data-status="waiting_approval"] .statusDot {
+  background: var(--amber);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.statusChip[data-status="done"] {
+  color: var(--mint);
+  border-color: rgba(110, 229, 194, 0.5);
+  background: rgba(110, 229, 194, 0.1);
+}
+.statusChip[data-status="done"] .statusDot {
+  background: var(--mint);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.7);
+  }
+}
+
+/* ============================================================================
+   Step feed (action feed) — live agent steps
+   ============================================================================ */
+
+.panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: rgba(34, 22, 70, 0.55);
+  padding: 1.25rem 1.4rem;
+}
+
+.panelTitle {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 1rem;
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 1.4rem 1fr;
+  gap: 0.75rem;
+  padding: 0.6rem 0;
+  position: relative;
+}
+.step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 0.65rem;
+  top: 1.7rem;
+  bottom: -0.35rem;
+  width: 1px;
+  background: var(--border);
+}
+
+.stepIcon {
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  z-index: 1;
+  color: var(--text-muted);
+}
+.step[data-state="done"] .stepIcon {
+  background: rgba(110, 229, 194, 0.15);
+  border-color: rgba(110, 229, 194, 0.5);
+  color: var(--mint);
+}
+.step[data-state="running"] .stepIcon {
+  background: rgba(124, 58, 237, 0.18);
+  border-color: rgba(124, 58, 237, 0.6);
+  color: var(--violet-2);
+}
+.step[data-state="running"] .stepIcon::after {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--violet-2);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.step[data-state="error"] .stepIcon {
+  background: rgba(255, 0, 138, 0.15);
+  border-color: rgba(255, 0, 138, 0.5);
+  color: var(--pink);
+}
+
+.stepLabel {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.3;
+}
+.stepDetail {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0.2rem 0 0;
+  line-height: 1.4;
+}
+
+/* ============================================================================
+   Approval card (human-in-the-loop)
+   ============================================================================ */
+
+.approval {
+  border: 1px solid rgba(255, 200, 58, 0.4);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 200, 58, 0.06), transparent 60%),
+    var(--surface);
+  padding: 1.25rem 1.4rem;
+  box-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.6);
+}
+
+.approvalHead {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.85rem;
+}
+.approvalBadge {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--amber);
+  border: 1px solid rgba(255, 200, 58, 0.4);
+  border-radius: var(--radius-full);
+  padding: 0.25rem 0.6rem;
+  background: rgba(255, 200, 58, 0.08);
+}
+.approvalTitle {
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text);
+}
+
+.approvalAction {
+  font-size: 0.92rem;
+  color: var(--text);
+  margin: 0 0 0.55rem;
+  line-height: 1.45;
+}
+.approvalUrl {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--violet-2);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.6rem;
+  margin-bottom: 1rem;
+  word-break: break-all;
+}
+
+.approvalButtons {
+  display: flex;
+  gap: 0.65rem;
+}
+
+.btn {
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-weight: 600;
+  border-radius: var(--radius);
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition:
+    transform 0.08s ease,
+    filter 0.15s ease,
+    background 0.15s ease;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btnApprove {
+  background: var(--grad);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 8px 20px -8px rgba(124, 58, 237, 0.7);
+}
+.btnApprove:not(:disabled):hover {
+  filter: brightness(1.08);
+}
+
+.btnReject {
+  background: transparent;
+  color: var(--text-muted);
+}
+.btnReject:not(:disabled):hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.approvalResolved {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+  color: var(--text-muted);
+}
+.approvalResolved[data-result="APPROVED"] {
+  color: var(--mint);
+}
+.approvalResolved[data-result="REJECTED"] {
+  color: var(--pink);
+}
+
+/* ============================================================================
+   Finding / result card (display-only generative UI)
+   ============================================================================ */
+
+.finding {
+  border: 1px solid rgba(110, 229, 194, 0.35);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(110, 229, 194, 0.06), transparent 55%),
+    var(--surface);
+  padding: 1.2rem 1.4rem;
+}
+.findingLabel {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--mint);
+  margin: 0 0 0.5rem;
+}
+.findingValue {
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+.findingNote {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0.4rem 0 0;
+}
+
+/* in-chat generative UI cards get a little breathing room */
+.copilotKitMessage .approval,
+.copilotKitMessage .finding,
+.copilotKitMessage .panel {
+  margin: 0.5rem 0;
+}
