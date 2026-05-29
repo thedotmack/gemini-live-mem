@@ -15,3 +15,6 @@ db-backups/
 skills-lock.json
 journey-into-gemini-live-mem-dev-history.md
 reports/
+
+# leftover upstream example — not part of this project
+browser-agent/

@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Pulsing "live" dot used by the model feed + memory feed headers. */
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.animate-live-pulse {
+  animation: live-pulse 1.5s infinite;
+}
+
+/* Pop-in for newly streamed memory items / invitation cards. */
+@keyframes pop-in {
+  from {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-pop-in {
+  animation: pop-in 0.3s ease-out;
+}
+
+/* Light markdown styling for streamed Gemini replies. */
+.markdown p {
+  margin: 0;
+}
+.markdown p + p {
+  margin-top: 0.5rem;
+}
+.markdown ul,
+.markdown ol {
+  margin: 0.25rem 0 0.25rem 1.1rem;
+  list-style: revert;
+}
+.markdown code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.85em;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.1em 0.35em;
+  border-radius: 0.3em;
+}
+.markdown a {
+  text-decoration: underline;
+}
