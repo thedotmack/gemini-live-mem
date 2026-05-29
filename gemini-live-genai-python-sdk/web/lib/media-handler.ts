@@ -18,6 +18,11 @@ export class MediaHandler {
   isRecording = false;
   private videoCanvas: HTMLCanvasElement;
   private canvasCtx: CanvasRenderingContext2D;
+  // Playback-side amplitude tap for the agent avatar's lip-sync. The avatar is
+  // purely presentational, so this must never alter the audio path or throw
+  // into the session — every read is guarded and fail-soft.
+  private analyser: AnalyserNode | null = null;
+  private amplitudeData: Uint8Array<ArrayBuffer> | null = null;
 
   constructor() {
     this.videoCanvas = document.createElement("canvas");
@@ -32,6 +37,18 @@ export class MediaHandler {
           .webkitAudioContext;
       this.audioContext = new Ctx();
       await this.audioContext.audioWorklet.addModule("/pcm-processor.js");
+    }
+    // Build the lip-sync analyser once. It sits inline on the playback graph
+    // (source → analyser → destination) so it observes exactly the audio the
+    // user hears without changing it.
+    if (!this.analyser) {
+      this.analyser = this.audioContext.createAnalyser();
+      this.analyser.fftSize = 256;
+      this.analyser.smoothingTimeConstant = 0.6;
+      this.amplitudeData = new Uint8Array(
+        new ArrayBuffer(this.analyser.frequencyBinCount)
+      );
+      this.analyser.connect(this.audioContext.destination);
     }
     if (this.audioContext.state === "suspended") {
       await this.audioContext.resume();
@@ -182,7 +199,9 @@ export class MediaHandler {
 
     const source = this.audioContext.createBufferSource();
     source.buffer = buffer;
-    source.connect(this.audioContext.destination);
+    // Route through the analyser when present (it forwards to destination), so
+    // the lip-sync tap sees the agent's voice. Falls back to a direct connect.
+    source.connect(this.analyser ?? this.audioContext.destination);
 
     const now = this.audioContext.currentTime;
     this.nextStartTime = Math.max(now, this.nextStartTime);
@@ -208,6 +227,26 @@ export class MediaHandler {
     if (this.audioContext) {
       this.nextStartTime = this.audioContext.currentTime;
     }
+  }
+
+  // ── Lip-sync taps (avatar only, fail-soft) ──────────────────────────────────
+  // Real-time RMS amplitude (0-1) of the agent's playback, for mouth animation.
+  getAgentAmplitude(): number {
+    if (!this.analyser || !this.amplitudeData) return 0;
+    this.analyser.getByteTimeDomainData(this.amplitudeData);
+    let sumSquares = 0;
+    for (let i = 0; i < this.amplitudeData.length; i++) {
+      const v = (this.amplitudeData[i] - 128) / 128; // center & normalize to -1..1
+      sumSquares += v * v;
+    }
+    const rms = Math.sqrt(sumSquares / this.amplitudeData.length);
+    // Subtract a small noise floor, then scale so normal speech spans ~0-1.
+    return Math.min(1, Math.max(0, (rms - 0.02) / 0.25));
+  }
+
+  // True while scheduled agent audio is still playing/queued ahead of "now".
+  isAgentSpeaking(): boolean {
+    return !!this.audioContext && this.audioContext.currentTime < this.nextStartTime - 0.05;
   }
 
   // Utils

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MediaHandler } from "@/lib/media-handler";
 import {
   GeminiClient,
@@ -44,6 +44,13 @@ export function useGeminiSession() {
   const [modelFrame, setModelFrame] = useState<ModelFrame>(null);
   const [micOn, setMicOn] = useState(false);
   const [videoSource, setVideoSource] = useState<VideoSource>("none");
+  // Drives the agent avatar's lip-sync. `agentVolume` is the live amplitude of
+  // the model's audio playback; `agentSpeaking` is true while audio is playing.
+  const [agentVolume, setAgentVolume] = useState(0);
+  const [agentSpeaking, setAgentSpeaking] = useState(false);
+  // Reserved: the agent's in-flight transcript for a speech bubble (off for v1).
+  const agentTranscript: string | null = null;
+  const rafRef = useRef<number | null>(null);
 
   const clientRef = useRef<GeminiClient | null>(null);
   const mediaRef = useRef<MediaHandler | null>(null);
@@ -67,6 +74,24 @@ export function useGeminiSession() {
     currentUserIdRef.current = null;
     currentGeminiIdRef.current = null;
   };
+
+  // Poll the playback amplitude tap on a RAF loop while live, so the avatar
+  // lip-syncs to the agent's voice. Reads mediaRef directly (never constructs a
+  // handler) and no-ops if there's none — purely presentational, fail-soft.
+  useEffect(() => {
+    if (phase !== "live") return;
+    const tick = () => {
+      const media = mediaRef.current;
+      setAgentVolume(media ? media.getAgentAmplitude() : 0);
+      setAgentSpeaking(media ? media.isAgentSpeaking() : false);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    };
+  }, [phase]);
 
   const appendStreaming = useCallback(
     (kind: "user" | "gemini", text: string) => {
@@ -321,6 +346,9 @@ export function useGeminiSession() {
     micOn,
     videoSource,
     videoElRef,
+    agentVolume,
+    agentSpeaking,
+    agentTranscript,
     // actions
     connect,
     disconnect,
