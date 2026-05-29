@@ -7,3 +7,11 @@ __pycache__
 
 tmp/
 db-backups/
+
+# local dev tooling / agent clutter — not part of the project
+.agents/
+.claude/
+.gstack/
+skills-lock.json
+journey-into-gemini-live-mem-dev-history.md
+reports/
