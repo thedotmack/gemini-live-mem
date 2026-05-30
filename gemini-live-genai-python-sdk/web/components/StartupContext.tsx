@@ -1,10 +1,12 @@
 "use client";
 
-import ReactMarkdown from "react-markdown";
-
-// What the agent knew when it woke up: the claude-mem startup memory that gets
-// injected into the live model's system prompt at session start. Presentational
-// only — no fetching, no toggle.
+// What the agent knew when it woke up: the claude-mem startup memory injected
+// into the live model's system prompt at session start. This is the exact
+// recent-context *timeline* claude-mem's SessionStart hook renders — a Legend
+// plus an `ID TIME TYPE TITLE` index of recent observations — so we show it
+// verbatim in a monospace, line-preserving block rather than reflowing it as
+// prose (markdown collapses the per-observation lines into one run-on blob).
+// Presentational only — no fetching, no toggle.
 export function StartupContext({ markdown }: { markdown: string | null }) {
   const hasMemory = typeof markdown === "string" && markdown.trim().length > 0;
 
@@ -20,9 +22,9 @@ export function StartupContext({ markdown }: { markdown: string | null }) {
 
       <div className="flex-1 min-h-0 overflow-y-auto p-4">
         {hasMemory ? (
-          <div className="markdown text-sm text-slate-700">
-            <ReactMarkdown>{markdown}</ReactMarkdown>
-          </div>
+          <pre className="whitespace-pre-wrap break-words font-mono text-[0.7rem] leading-relaxed text-slate-700">
+            {markdown}
+          </pre>
         ) : (
           <div className="px-2 py-6 text-center text-sm text-slate-500">
             No prior memory — this is our first session.

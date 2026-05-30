@@ -655,32 +655,36 @@ class MemorySink:
         return None, None
 
     # --- claude-mem read access (session-start context + recall tools) --------
-    async def fetch_session_start_context(self, limit=8):
-        """Return the standard claude-mem 'recent session context' as markdown.
+    async def fetch_session_start_context(self):
+        """Return claude-mem's recent-session context the way the model should see it.
 
-        This is the same recent-session summary the SessionStart hook injects;
-        we feed it into the Gemini system prompt so the assistant starts each
-        session already knowing what it recently saw. Fail-soft: returns "".
+        Hits /api/context/inject — the SAME endpoint claude-mem's SessionStart
+        hook uses — so the live model (and the UI's startup panel) wake up with
+        the exact observation *timeline* a Claude Code session gets: a Legend +
+        the `ID TIME TYPE TITLE` index of recent observations. We deliberately do
+        NOT use /api/context/recent: that returns verbose prose session summaries,
+        not the timeline, and it omits the per-observation IDs that make the
+        model's get_memory_observations drill-down work. Fail-soft: returns "".
         """
-        data = await self._get_json(
-            "/api/context/recent", {"project": self.project, "limit": limit}
-        )
-        return self._mcp_text(data).strip()
+        text = await self._get_text("/api/context/inject", {"project": self.project})
+        return text.strip()
 
     async def fetch_timeline(self, limit=1000):
-        """Return recent session observations across this and past sessions.
+        """Return the recent-session observation timeline (Legend + ID TIME TYPE TITLE).
 
-        Uses /api/context/recent (limit = number of recent sessions), which
-        returns the full observation text grouped by session. We deliberately
-        avoid /api/timeline: that endpoint is hard-capped at a ±10 record window
-        around its anchor and ignores limit, so it could only ever surface ~10
-        observations no matter what the caller asked for.
+        Same context output claude-mem's SessionStart hook renders (via
+        /api/context/inject), so the model's get_memory_timeline tool sees the
+        ID-indexed timeline it can then drill into with get_memory_observations.
+        A large `limit` asks for the fuller view (full observation bodies for the
+        most recent entries; the worker controls the exact counts). We avoid both
+        /api/context/recent (prose summaries, no ID index) and /api/timeline (the
+        latter is hard-capped at a ±10 record window and ignores limit). Fail-soft.
         """
-        data = await self._get_json(
-            "/api/context/recent",
-            {"project": self.project, "limit": limit},
-        )
-        return self._mcp_text(data).strip() or "No timeline is available yet."
+        params = {"project": self.project}
+        if limit and limit > 50:
+            params["full"] = "true"
+        text = await self._get_text("/api/context/inject", params)
+        return text.strip() or "No timeline is available yet."
 
     async def fetch_observations(self, ids):
         """Return readable details for the given observation IDs."""
@@ -752,15 +756,6 @@ class MemorySink:
         return await self.fetch_observations(ids)
 
     @staticmethod
-    def _mcp_text(data):
-        """Pull the text payload out of an MCP-style {content:[{text}]} response."""
-        if isinstance(data, dict):
-            content = data.get("content")
-            if isinstance(content, list) and content:
-                return content[0].get("text", "") or ""
-        return ""
-
-    @staticmethod
     def _format_observations(items):
         lines = []
         for obs in items:
@@ -795,6 +790,22 @@ class MemorySink:
                 "platformSource": PLATFORM_SOURCE,
             },
         )
+
+    async def _get_text(self, path, params=None):
+        """GET plain text from the worker, swallowing every error (returns "").
+
+        For endpoints like /api/context/inject that return rendered text/plain
+        (the recent-context timeline) rather than a JSON envelope.
+        """
+        try:
+            response = await self._client.get(f"{self.worker_url}{path}", params=params)
+            if response.status_code >= 400:
+                logger.warning(f"claude-mem {path} -> {response.status_code}: {response.text[:200]}")
+                return ""
+            return response.text or ""
+        except Exception as e:
+            logger.debug(f"claude-mem GET {path} failed: {e}")
+            return ""
 
     async def _get_json(self, path, params=None):
         """GET JSON from the worker, swallowing every error (returns None)."""
