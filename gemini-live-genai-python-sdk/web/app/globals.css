@@ -93,14 +93,17 @@
   }
 }
 
-/* lg: six-column bento — perception | dialogue | memory. */
+/* lg: six-column bento — perception | dialogue | memory.
+   `face` spans two rows so the 200px Pepe sprite is never squeezed below its
+   own height and clipped by the cell's overflow-hidden (which froze the
+   lip-sync mouth on short laptop viewports). */
 @media (min-width: 1024px) {
   .bento {
     grid-template-columns: repeat(6, 1fr);
     grid-auto-rows: minmax(0, auto);
     grid-template-areas:
       "face  face  convo convo startup startup"
-      "video video convo convo tools   tools"
+      "face  face  convo convo tools   tools"
       "video video convo convo memory  memory"
       "ctrl  ctrl  convo convo memory  memory";
   }
