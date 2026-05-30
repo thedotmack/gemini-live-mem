@@ -7,6 +7,7 @@ import {
   type InvitationDetails,
   type Observation,
   type ServerMessage,
+  type ToolCall,
 } from "@/lib/gemini-client";
 
 export type SessionPhase = "gate" | "live" | "ended";
@@ -41,6 +42,8 @@ export function useGeminiSession() {
   const [statusText, setStatusText] = useState("Disconnected");
   const [chat, setChat] = useState<ChatItem[]>([]);
   const [observations, setObservations] = useState<Observation[]>([]);
+  const [startupContext, setStartupContext] = useState<string | null>(null);
+  const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
   const [modelFrame, setModelFrame] = useState<ModelFrame>(null);
   const [micOn, setMicOn] = useState(false);
   const [videoSource, setVideoSource] = useState<VideoSource>("none");
@@ -145,6 +148,23 @@ export function useGeminiSession() {
           if (msg.observation?.title) {
             setObservations((prev) => [...prev, msg.observation]);
           }
+          break;
+        case "session_context":
+          setStartupContext(msg.markdown ?? "");
+          break;
+        case "tool_call":
+          setToolCalls((prev) => [
+            ...prev,
+            {
+              id: nextId(),
+              name: msg.name,
+              args: msg.args ?? {},
+              result:
+                typeof msg.result === "string"
+                  ? msg.result
+                  : JSON.stringify(msg.result ?? ""),
+            },
+          ]);
           break;
         case "error":
           // BYOK: surface a missing/invalid key (e.g. a key without Gemini Live
@@ -329,6 +349,8 @@ export function useGeminiSession() {
     stopAllMedia();
     setChat([]);
     setObservations([]);
+    setStartupContext(null);
+    setToolCalls([]);
     resetTurn();
     setStatus("disconnected");
     setStatusText("Disconnected");
@@ -342,6 +364,8 @@ export function useGeminiSession() {
     statusText,
     chat,
     observations,
+    startupContext,
+    toolCalls,
     modelFrame,
     micOn,
     videoSource,

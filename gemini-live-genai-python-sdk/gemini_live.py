@@ -45,6 +45,7 @@ class GeminiLive:
         tools = list(self.tools)
         tool_mapping = dict(self.tool_mapping)
 
+        session_start_context = ""
         if memory_sink:
             session_start_context = await memory_sink.fetch_session_start_context()
             if session_start_context:
@@ -126,6 +127,10 @@ class GeminiLive:
             # the frontend through the same queue the receive loop drains.
             if memory_sink:
                 memory_sink.emit = event_queue.put
+                # Surface the startup memory the model was given (what it "woke up"
+                # knowing) to the frontend so the UI shows exactly what the agent sees.
+                # Fail-soft: just one more event on the queue main.py already forwards.
+                await event_queue.put({"type": "session_context", "markdown": session_start_context})
 
             async def receive_loop():
                 try:

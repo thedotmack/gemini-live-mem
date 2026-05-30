@@ -57,3 +57,51 @@
 .markdown a {
   text-decoration: underline;
 }
+
+/* Bento dashboard: groups cards into PERCEPTION | DIALOGUE | MEMORY. */
+.bento {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;            /* base: single column */
+  grid-template-areas:
+    "face"
+    "ctrl"
+    "video"
+    "convo"
+    "startup"
+    "tools"
+    "memory";
+}
+.area-face { grid-area: face; }
+.area-video { grid-area: video; }
+.area-controls { grid-area: ctrl; }
+.area-convo { grid-area: convo; }
+.area-startup { grid-area: startup; }
+.area-tools { grid-area: tools; }
+.area-memory { grid-area: memory; }
+
+/* md: two columns; conversation tall, memory cards band below. */
+@media (min-width: 640px) {
+  .bento {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "face   convo"
+      "video  convo"
+      "ctrl   convo"
+      "startup tools"
+      "memory memory";
+  }
+}
+
+/* lg: six-column bento — perception | dialogue | memory. */
+@media (min-width: 1024px) {
+  .bento {
+    grid-template-columns: repeat(6, 1fr);
+    grid-auto-rows: minmax(0, auto);
+    grid-template-areas:
+      "face  face  convo convo startup startup"
+      "video video convo convo tools   tools"
+      "video video convo convo memory  memory"
+      "ctrl  ctrl  convo convo memory  memory";
+  }
+}

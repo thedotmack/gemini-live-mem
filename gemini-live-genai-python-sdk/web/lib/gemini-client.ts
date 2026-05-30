@@ -13,7 +13,8 @@
  *   inbound (server -> client):
  *     - binary  -> 24 kHz PCM audio to play
  *     - JSON {type} in: interrupted | turn_complete | user | gemini |
- *                       event_invitation | observation | error
+ *                       event_invitation | observation | session_context |
+ *                       tool_call | error
  */
 
 export type InvitationDetails = {
@@ -29,6 +30,13 @@ export type Observation = {
   obs_type?: string;
 };
 
+export type ToolCall = {
+  id: number;
+  name: string;
+  args: Record<string, unknown>;
+  result: string;
+};
+
 export type ServerMessage =
   | { type: "interrupted" }
   | { type: "turn_complete" }
@@ -41,6 +49,8 @@ export type ServerMessage =
       details?: InvitationDetails;
     }
   | { type: "observation"; observation: Observation }
+  | { type: "session_context"; markdown: string }
+  | { type: "tool_call"; name: string; args?: Record<string, unknown>; result?: string }
   | { type: "error"; error: string };
 
 export type GeminiClientConfig = {
