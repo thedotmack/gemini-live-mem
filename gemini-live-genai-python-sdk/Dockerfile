@@ -13,8 +13,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
 
+# uv (provides `uvx`) — claude-mem launches Chroma semantic search by spawning
+# `uvx chroma-mcp==0.2.6` over MCP stdio. Without uv on PATH, Chroma can't start
+# and CLAUDE_MEM_CHROMA_ENABLED=true would just loop on health-check failures.
+# Install into /usr/local/bin so every process (incl. the Bun worker) sees it.
+RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin INSTALLER_NO_MODIFY_PATH=1 sh
+
 # claude-mem (pinned). Installs the CLI + bundled worker plugin globally.
 RUN npm install -g claude-mem@13.3.0
+
+# Pre-warm the pinned Chroma MCP server (+ its Python deps) into uv's cache so
+# the first live session doesn't pay a cold download and worker boot stays
+# deterministic. Best-effort: never fail the build on it.
+RUN uvx --python 3.11 chroma-mcp==0.2.6 --help >/dev/null 2>&1 || true
 
 WORKDIR /app
 

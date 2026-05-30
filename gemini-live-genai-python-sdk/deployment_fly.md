@@ -66,7 +66,7 @@ Set with `fly secrets set KEY=value -a gemini-live-mem` (triggers a redeploy):
 | `CLAUDE_MEM_GEMINI_MODEL` | `gemini-2.5-flash` | Observer/extraction model |
 | `CLAUDE_MEM_VISION_ENABLED` | `true` | Autonomous video-frame captioning into memory |
 | `CLAUDE_MEM_INVITATION_ENABLED` | `true` | Auto event-invitation image generation |
-| `CLAUDE_MEM_CHROMA_ENABLED` | `false` | Semantic vector search (adds Python/Chroma overhead) |
+| `CLAUDE_MEM_CHROMA_ENABLED` | `true` | Semantic vector search (chroma-mcp via `uvx`, persistent index on the `/data` volume) — powers semantic memory recall |
 
 ## Notes & gotchas
 

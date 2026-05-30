@@ -10,6 +10,10 @@ primary_region = "iad"
 [env]
   PORT = "8080"
   CLAUDE_MEM_DATA_DIR = "/data/claude-mem"
+  # Semantic vector search is ON — see docker-entrypoint.sh. The chroma-mcp
+  # subprocess (uvx) keeps its persistent index on the /data volume.
+  CLAUDE_MEM_CHROMA_ENABLED = "true"
+  CLAUDE_MEM_CHROMA_MODE = "local"
 
 [http_service]
   internal_port = 8080
@@ -32,4 +36,6 @@ primary_region = "iad"
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "1024"
+  # 2 GB: Chroma's embedding model + index loads alongside the Bun worker, the
+  # Python app, and the static-serving layer. 1 GB OOMs once Chroma is on.
+  memory = "2048"

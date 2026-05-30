@@ -29,10 +29,13 @@ export CLAUDE_MEM_PROVIDER="${CLAUDE_MEM_PROVIDER:-gemini}"
 export CLAUDE_MEM_GEMINI_API_KEY="byo-no-server-key-placeholder"
 export CLAUDE_MEM_GEMINI_MODEL="${CLAUDE_MEM_GEMINI_MODEL:-gemini-2.5-flash}"
 export CLAUDE_MEM_MODE="${CLAUDE_MEM_MODE:-gemini-live}"
-# Chroma (semantic search) is intentionally off: the live sink only reads back
-# chronological context (recent + batch-by-id), which is SQLite-backed. This
-# keeps the image lean and the worker boot deterministic. Flip to enable later.
-export CLAUDE_MEM_CHROMA_ENABLED="${CLAUDE_MEM_CHROMA_ENABLED:-false}"
+# Chroma (semantic vector search) is ON — it powers semantic memory recall
+# (memory_search / smart_search), which is the whole point of the memory. The
+# worker launches it as a chroma-mcp subprocess via `uvx chroma-mcp==0.2.6` (uv
+# is installed in the image), in local/persistent mode so its vector index lives
+# on the Fly volume alongside the SQLite DB. Keep it on.
+export CLAUDE_MEM_CHROMA_ENABLED="${CLAUDE_MEM_CHROMA_ENABLED:-true}"
+export CLAUDE_MEM_CHROMA_MODE="${CLAUDE_MEM_CHROMA_MODE:-local}"
 export CLAUDE_MEM_WORKER_HOST="${CLAUDE_MEM_WORKER_HOST:-127.0.0.1}"
 export CLAUDE_MEM_WORKER_PORT="${CLAUDE_MEM_WORKER_PORT:-37777}"
 export CLAUDE_MEM_LOG_LEVEL="${CLAUDE_MEM_LOG_LEVEL:-INFO}"
